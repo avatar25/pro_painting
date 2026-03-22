@@ -89,10 +89,10 @@ body::before {
 
 .title-block h1 {
   margin: 0;
-  font-size: clamp(2.25rem, 4.4vw, 4.4rem);
-  line-height: 0.98;
+  font-size: clamp(1.6rem, 2.8vw, 2.8rem);
+  line-height: 1.1;
   color: #f5ece0;
-  max-width: 14ch;
+  white-space: nowrap;
   font-family: 'Noto Serif JP', 'Cormorant Garamond', serif;
   font-weight: 700;
 }

@@ -12,7 +12,7 @@ function App() {
       <section className="page-header">
         <div className="title-block">
           <p className="eyebrow">Procedural Ukiyo-e Canvas</p>
-          <h1>Scrolling Landscape Generator</h1>
+          <h1>Ukiyo-e Landscapes</h1>
           <p className="description">
             The scene now renders as a wider hidden panorama and gently pans across it, so each seed feels more like a
             drifting painted screen than a still postcard.
