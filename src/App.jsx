@@ -5,7 +5,7 @@ function App() {
   const landscapeRef = useRef(null);
   const [mountainLayers, setMountainLayers] = useState(5);
   const [fogDensity, setFogDensity] = useState(0.58);
-  const [baseColor, setBaseColor] = useState('#6b7a5f');
+  const [baseColor, setBaseColor] = useState('#4a6741');
 
   return (
     <main className="app-shell">
