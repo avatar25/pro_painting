@@ -126,7 +126,7 @@ function perlin1D(x, seed) {
   return lerp(dotA, dotB, blend);
 }
 
-function fractalNoise1D(x, seed, octaves = 5, persistence = 0.55, lacunarity = 2) {
+function fbm1D(x, seed, octaves = 5, persistence = 0.55, lacunarity = 2) {
   let total = 0;
   let amplitude = 1;
   let frequency = 1;
@@ -142,6 +142,27 @@ function fractalNoise1D(x, seed, octaves = 5, persistence = 0.55, lacunarity = 2
   return maxValue === 0 ? 0 : total / maxValue;
 }
 
+function ridgedFbm1D(x, seed, octaves = 6, persistence = 0.56, lacunarity = 2.2, sharpness = 2.35) {
+  let total = 0;
+  let amplitude = 1;
+  let frequency = 1;
+  let maxValue = 0;
+  let weight = 1;
+
+  for (let octave = 0; octave < octaves; octave += 1) {
+    const signal = 1 - Math.abs(perlin1D(x * frequency, seed + octave * 131));
+    const ridge = Math.pow(clamp(signal, 0, 1), sharpness) * weight;
+
+    total += ridge * amplitude;
+    maxValue += amplitude;
+    weight = clamp(ridge * 2.8, 0, 1);
+    amplitude *= persistence;
+    frequency *= lacunarity;
+  }
+
+  return maxValue === 0 ? 0 : total / maxValue;
+}
+
 function sineWaveSummation(x, seed, depth) {
   const phase = seed * 0.0013;
   const broad = Math.sin((x + phase) * (Math.PI * 2.2 + depth * 1.7)) * 0.55;
@@ -149,6 +170,12 @@ function sineWaveSummation(x, seed, depth) {
   const detail = Math.sin((x + phase * 3.1) * (Math.PI * 10.4 + depth * 5.1)) * 0.1;
 
   return broad + medium + detail;
+}
+
+function sharpPeak(x, center, leftWidth, rightWidth, sharpness = 2.5) {
+  const width = x < center ? leftWidth : rightWidth;
+  const normalizedDistance = Math.abs(x - center) / Math.max(width, 0.0001);
+  return Math.pow(clamp(1 - normalizedDistance, 0, 1), sharpness);
 }
 
 function getLayerColor(index, totalLayers, baseColor) {
@@ -170,35 +197,44 @@ function getLayerColor(index, totalLayers, baseColor) {
 function buildMountainRidge(width, height, layerIndex, totalLayers, seed) {
   const random = createSeededRandom(seed + layerIndex * 173);
   const depth = totalLayers <= 1 ? 1 : layerIndex / (totalLayers - 1);
-  const baseY = height * (0.35 + depth * 0.18);
-  const amplitude = height * (0.045 + depth * 0.085);
-  const detailScale = 1.6 + depth * 2.6;
-  const peakA = 0.12 + random() * 0.25;
-  const peakB = 0.46 + random() * 0.28;
-  const peakC = 0.7 + random() * 0.18;
-  const valley = 0.3 + random() * 0.24;
+  const baseY = height * (0.39 + depth * 0.16);
+  const amplitude = height * (0.08 + depth * 0.11);
+  const massifScale = 1.4 + depth * 1.1;
+  const cragScale = 4.8 + depth * 2.8;
+  const chiselScale = 11 + depth * 5.4;
+  const peakA = 0.16 + random() * 0.18;
+  const peakB = 0.42 + random() * 0.18;
+  const peakC = 0.68 + random() * 0.14;
+  const valley = 0.28 + random() * 0.28;
   const horizonLift = random() * 0.08;
   const points = [];
-  const step = Math.max(4, Math.floor(width / 220));
+  const step = Math.max(3, Math.floor(width / 280));
 
   for (let x = 0; x <= width + step; x += step) {
     const nx = x / width;
-    const coarse = fractalNoise1D(nx * detailScale + horizonLift, seed + layerIndex * 31, 5, 0.55, 2.15);
-    const fine = fractalNoise1D(nx * (detailScale * 2.4) + 12.3, seed + layerIndex * 67, 3, 0.45, 2.8);
-    const waves = sineWaveSummation(nx, seed + layerIndex * 47, depth);
-    const peakCurveA = Math.exp(-((nx - peakA) ** 2) / (0.012 + depth * 0.024));
-    const peakCurveB = Math.exp(-((nx - peakB) ** 2) / (0.02 + depth * 0.03));
-    const peakCurveC = Math.exp(-((nx - peakC) ** 2) / (0.014 + depth * 0.028));
-    const valleyCurve = Math.exp(-((nx - valley) ** 2) / 0.018);
+    const warp = fbm1D(nx * (1.15 + depth * 0.35) + horizonLift, seed + layerIndex * 17, 4, 0.58, 2.12);
+    const warpedX = nx + warp * (0.07 - depth * 0.018);
+    const broadMass = ridgedFbm1D(warpedX * massifScale + 1.7, seed + layerIndex * 31, 6, 0.58, 2.08, 2.15);
+    const crags = ridgedFbm1D(warpedX * cragScale + 9.4, seed + layerIndex * 67, 5, 0.52, 2.55, 2.6);
+    const chisels = ridgedFbm1D(warpedX * chiselScale + 15.9, seed + layerIndex * 109, 4, 0.45, 3.05, 3);
+    const underShape = Math.max(0, fbm1D(warpedX * (1 + depth * 0.35) + 4.2, seed + layerIndex * 47, 4, 0.54, 2.02));
+    const waves = sineWaveSummation(nx, seed + layerIndex * 47, depth) * 0.04;
+    const peakCurveA = sharpPeak(nx, peakA, 0.11 + depth * 0.035, 0.05 + depth * 0.018, 2.7);
+    const peakCurveB = sharpPeak(nx, peakB, 0.095 + depth * 0.03, 0.06 + depth * 0.02, 2.6);
+    const peakCurveC = sharpPeak(nx, peakC, 0.085 + depth * 0.028, 0.05 + depth * 0.018, 2.8);
+    const valleyCurve = Math.pow(clamp(1 - Math.abs(nx - valley) / 0.09, 0, 1), 1.8);
     const ridgeValue =
-      coarse * 0.72 +
-      fine * 0.22 +
-      waves * 0.18 +
-      peakCurveA * (0.44 + depth * 0.14) +
-      peakCurveB * (0.36 + depth * 0.16) +
-      peakCurveC * (0.28 + depth * 0.14) -
-      valleyCurve * 0.16;
-    const y = baseY - ridgeValue * amplitude;
+      broadMass * 0.9 +
+      crags * 0.42 +
+      chisels * 0.18 +
+      underShape * 0.22 +
+      peakCurveA * (0.62 + depth * 0.1) +
+      peakCurveB * (0.42 + depth * 0.12) +
+      peakCurveC * (0.3 + depth * 0.12) +
+      waves -
+      valleyCurve * 0.14;
+    const shapedRidge = Math.pow(Math.max(ridgeValue, 0), 1.22);
+    const y = baseY - shapedRidge * amplitude;
 
     points.push({ x, y });
   }
@@ -274,7 +310,7 @@ function drawFogBand(ctx, width, centerY, thickness, opacity, seedOffset) {
   ctx.beginPath();
 
   for (let x = 0; x <= width; x += 8) {
-    const drift = fractalNoise1D(x * 0.005 + seedOffset, seedOffset * 113, 3, 0.55, 2.1) * thickness * 0.16;
+    const drift = fbm1D(x * 0.005 + seedOffset, seedOffset * 113, 3, 0.55, 2.1) * thickness * 0.16;
     const y = centerY - thickness * 0.45 + drift;
     if (x === 0) {
       ctx.moveTo(x, y);
@@ -284,7 +320,7 @@ function drawFogBand(ctx, width, centerY, thickness, opacity, seedOffset) {
   }
 
   for (let x = width; x >= 0; x -= 8) {
-    const drift = fractalNoise1D(x * 0.005 + seedOffset + 7.3, seedOffset * 131, 3, 0.55, 2.1) * thickness * 0.2;
+    const drift = fbm1D(x * 0.005 + seedOffset + 7.3, seedOffset * 131, 3, 0.55, 2.1) * thickness * 0.2;
     const y = centerY + thickness * 0.55 + drift;
     ctx.lineTo(x, y);
   }
