@@ -319,34 +319,124 @@ function drawMountainLayer(ctx, width, height, ridge, color, seed, layerIndex) {
   drawMountainOutline(ctx, ridge, seed, layerIndex);
 }
 
-function drawFogBand(ctx, width, centerY, thickness, opacity, seedOffset) {
-  const gradient = ctx.createLinearGradient(0, centerY - thickness, 0, centerY + thickness);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
-  gradient.addColorStop(0.5, `rgba(255, 255, 255, ${opacity})`);
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+function sampleRidgeY(ridge, x) {
+  const points = ridge.points;
+
+  if (!points.length) {
+    return ridge.baseY;
+  }
+
+  if (x <= points[0].x) {
+    return points[0].y;
+  }
+
+  if (x >= points[points.length - 1].x) {
+    return points[points.length - 1].y;
+  }
+
+  const step = points.length > 1 ? points[1].x - points[0].x : 1;
+  const baseIndex = clamp(Math.floor(x / Math.max(step, 1)), 0, points.length - 2);
+  const start = points[baseIndex];
+  const end = points[baseIndex + 1];
+  const t = (x - start.x) / Math.max(end.x - start.x, 0.0001);
+
+  return lerp(start.y, end.y, t);
+}
+
+function drawValleyMist(ctx, width, upperRidge, lowerRidge, fogDensity, seedOffset) {
+  const resolvedFog = clamp(fogDensity, 0, 1);
+  const bandCount = 3 + Math.round(resolvedFog * 2);
+  const step = 8;
+  const xs = [];
+
+  for (let x = 0; x <= width; x += step) {
+    xs.push(x);
+  }
+
+  if (xs[xs.length - 1] !== width) {
+    xs.push(width);
+  }
 
   ctx.save();
   ctx.beginPath();
 
-  for (let x = 0; x <= width; x += 8) {
-    const drift = fbm1D(x * 0.005 + seedOffset, seedOffset * 113, 3, 0.55, 2.1) * thickness * 0.16;
-    const y = centerY - thickness * 0.45 + drift;
-    if (x === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-  }
+  xs.forEach((x, index) => {
+    const upperY = sampleRidgeY(upperRidge, x);
+    const lowerY = sampleRidgeY(lowerRidge, x);
+    const clipTop = upperY + Math.max(6, (lowerY - upperY) * 0.06);
 
-  for (let x = width; x >= 0; x -= 8) {
-    const drift = fbm1D(x * 0.005 + seedOffset + 7.3, seedOffset * 131, 3, 0.55, 2.1) * thickness * 0.2;
-    const y = centerY + thickness * 0.55 + drift;
-    ctx.lineTo(x, y);
+    if (index === 0) {
+      ctx.moveTo(x, clipTop);
+    } else {
+      ctx.lineTo(x, clipTop);
+    }
+  });
+
+  for (let index = xs.length - 1; index >= 0; index -= 1) {
+    const x = xs[index];
+    const upperY = sampleRidgeY(upperRidge, x);
+    const lowerY = sampleRidgeY(lowerRidge, x);
+    const clipBottom = lowerY - Math.max(4, (lowerY - upperY) * 0.03);
+
+    ctx.lineTo(x, clipBottom);
   }
 
   ctx.closePath();
-  ctx.fillStyle = gradient;
-  ctx.fill();
+  ctx.clip();
+
+  for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
+    const bandLift = bandIndex / Math.max(bandCount - 1, 1);
+    const density = 1 - bandLift * 0.22;
+
+    ctx.beginPath();
+
+    xs.forEach((x, index) => {
+      const upperY = sampleRidgeY(upperRidge, x);
+      const lowerY = sampleRidgeY(lowerRidge, x);
+      const gap = Math.max(18, lowerY - upperY);
+      const centerRatio = 0.78 - bandLift * 0.18;
+      const centerY = upperY + gap * centerRatio;
+      const bandHeight = Math.max(12, gap * (0.12 + (1 - bandLift) * 0.08 + resolvedFog * 0.05));
+      const topDrift = fbm1D(x * 0.004 + seedOffset + bandIndex * 2.1, seedOffset * 113, 3, 0.55, 2.1) * bandHeight * 0.18;
+      const topY = centerY - bandHeight * 0.92 + topDrift;
+
+      if (index === 0) {
+        ctx.moveTo(x, topY);
+      } else {
+        ctx.lineTo(x, topY);
+      }
+    });
+
+    for (let index = xs.length - 1; index >= 0; index -= 1) {
+      const x = xs[index];
+      const upperY = sampleRidgeY(upperRidge, x);
+      const lowerY = sampleRidgeY(lowerRidge, x);
+      const gap = Math.max(18, lowerY - upperY);
+      const centerRatio = 0.78 - bandLift * 0.18;
+      const centerY = upperY + gap * centerRatio;
+      const bandHeight = Math.max(12, gap * (0.12 + (1 - bandLift) * 0.08 + resolvedFog * 0.05));
+      const bottomDrift =
+        fbm1D(x * 0.004 + seedOffset + bandIndex * 2.1 + 5.7, seedOffset * 131, 3, 0.55, 2.1) * bandHeight * 0.16;
+      const lowerLimit = lowerY - Math.max(2, gap * 0.025);
+      const bottomY = Math.min(lowerLimit, centerY + bandHeight * 0.34 + bottomDrift);
+
+      ctx.lineTo(x, bottomY);
+    }
+
+    ctx.closePath();
+
+    const averageGap = lowerRidge.baseY - upperRidge.baseY;
+    const gradient = ctx.createLinearGradient(0, upperRidge.baseY, 0, lowerRidge.baseY + averageGap * 0.1);
+    const lowerOpacity = clamp((0.08 + resolvedFog * 0.16) * density, 0.05, 0.24);
+
+    gradient.addColorStop(0, 'rgba(248, 244, 236, 0)');
+    gradient.addColorStop(0.45, `rgba(246, 241, 232, ${lowerOpacity * 0.34})`);
+    gradient.addColorStop(1, `rgba(242, 238, 228, ${lowerOpacity})`);
+
+    ctx.fillStyle = gradient;
+    ctx.fill();
+  }
+
   ctx.restore();
 }
 
@@ -496,11 +586,7 @@ function paintLandscape(ctx, width, height, { mountainLayers, baseColor, fogDens
 
     if (layerIndex < ridges.length - 1) {
       const nextRidge = ridges[layerIndex + 1];
-      const fogY = lerp(ridge.baseY, nextRidge.baseY, 0.48);
-      const fogThickness = height * (0.035 + resolvedFog * 0.03 + ridge.depth * 0.012);
-      const fogOpacity = 0.08 + resolvedFog * 0.13 - ridge.depth * 0.02;
-
-      drawFogBand(ctx, width, fogY, fogThickness, clamp(fogOpacity, 0.04, 0.22), seed + layerIndex * 41);
+      drawValleyMist(ctx, width, ridge, nextRidge, resolvedFog, seed + layerIndex * 41);
     }
   });
 
