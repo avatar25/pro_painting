@@ -352,44 +352,101 @@ function drawFogBand(ctx, width, centerY, thickness, opacity, seedOffset) {
 
 function createPaperTexture(width, height, seed) {
   const textureCanvas = document.createElement('canvas');
-  const textureSize = 160;
   const textureContext = textureCanvas.getContext('2d');
+  const textureWidth = Math.max(1, Math.floor(width));
+  const textureHeight = Math.max(1, Math.floor(height));
 
-  textureCanvas.width = textureSize;
-  textureCanvas.height = textureSize;
+  textureCanvas.width = textureWidth;
+  textureCanvas.height = textureHeight;
 
   if (!textureContext) {
     return null;
   }
 
-  const imageData = textureContext.createImageData(textureSize, textureSize);
+  const imageData = textureContext.createImageData(textureWidth, textureHeight);
   const pixels = imageData.data;
-  const random = createSeededRandom(seed + width + height);
+  const random = createSeededRandom(seed + textureWidth * 3 + textureHeight * 7);
+  const columnMemory = new Float32Array(textureWidth);
 
-  for (let index = 0; index < pixels.length; index += 4) {
-    const value = 226 + Math.floor(random() * 24);
-    const alpha = 4 + Math.floor(random() * 13);
+  for (let y = 0; y < textureHeight; y += 1) {
+    let rowMemory = random();
 
-    pixels[index] = value;
-    pixels[index + 1] = value - Math.floor(random() * 6);
-    pixels[index + 2] = value - Math.floor(random() * 10);
-    pixels[index + 3] = alpha;
+    for (let x = 0; x < textureWidth; x += 1) {
+      const grain = random();
+      const warmShift = random();
+      rowMemory = rowMemory * 0.84 + grain * 0.16;
+      columnMemory[x] = columnMemory[x] * 0.9 + grain * 0.1;
+
+      const fiberField = rowMemory * 0.58 + columnMemory[x] * 0.42;
+      const tonalLift = Math.floor(fiberField * 18);
+      const value = 226 + tonalLift + Math.floor(warmShift * 8);
+      const alpha = 5 + Math.floor(Math.abs(grain - fiberField) * 26) + Math.floor(random() * 5);
+      const index = (y * textureWidth + x) * 4;
+
+      pixels[index] = value;
+      pixels[index + 1] = value - Math.floor(4 + warmShift * 8);
+      pixels[index + 2] = value - Math.floor(10 + warmShift * 12);
+      pixels[index + 3] = alpha;
+    }
   }
 
   textureContext.putImageData(imageData, 0, 0);
-  textureContext.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-  textureContext.lineWidth = 0.5;
+  textureContext.globalCompositeOperation = 'multiply';
 
-  for (let fiber = 0; fiber < 24; fiber += 1) {
-    const x = random() * textureSize;
-    const y = random() * textureSize;
-    const length = 16 + random() * 28;
-    const angle = (random() - 0.5) * 0.8;
+  for (let stain = 0; stain < 8; stain += 1) {
+    const centerX = random() * textureWidth;
+    const centerY = random() * textureHeight;
+    const radius = Math.min(textureWidth, textureHeight) * (0.14 + random() * 0.18);
+    const stainGradient = textureContext.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+
+    stainGradient.addColorStop(0, `rgba(166, 142, 112, ${0.035 + random() * 0.025})`);
+    stainGradient.addColorStop(1, 'rgba(166, 142, 112, 0)');
+    textureContext.fillStyle = stainGradient;
+    textureContext.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
+  }
+
+  textureContext.strokeStyle = 'rgba(112, 96, 78, 0.045)';
+
+  for (let fiber = 0; fiber < Math.max(80, Math.floor((textureWidth * textureHeight) / 22000)); fiber += 1) {
+    const x = random() * textureWidth;
+    const y = random() * textureHeight;
+    const length = 24 + random() * 90;
+    const angle = (random() - 0.5) * 0.65 + (random() > 0.55 ? 0 : Math.PI / 2);
 
     textureContext.beginPath();
+    textureContext.lineWidth = 0.35 + random() * 1.15;
     textureContext.moveTo(x, y);
     textureContext.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
     textureContext.stroke();
+  }
+
+  textureContext.globalCompositeOperation = 'screen';
+  textureContext.strokeStyle = 'rgba(255, 250, 242, 0.035)';
+
+  for (let fiber = 0; fiber < Math.max(48, Math.floor((textureWidth * textureHeight) / 36000)); fiber += 1) {
+    const x = random() * textureWidth;
+    const y = random() * textureHeight;
+    const length = 18 + random() * 70;
+    const angle = (random() - 0.5) * 0.5;
+
+    textureContext.beginPath();
+    textureContext.lineWidth = 0.25 + random() * 0.8;
+    textureContext.moveTo(x, y);
+    textureContext.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+    textureContext.stroke();
+  }
+
+  textureContext.globalCompositeOperation = 'source-over';
+
+  for (let speck = 0; speck < Math.max(120, Math.floor((textureWidth * textureHeight) / 12000)); speck += 1) {
+    const speckX = random() * textureWidth;
+    const speckY = random() * textureHeight;
+    const radius = 0.3 + random() * 1.3;
+
+    textureContext.fillStyle = `rgba(95, 82, 70, ${0.012 + random() * 0.022})`;
+    textureContext.beginPath();
+    textureContext.arc(speckX, speckY, radius, 0, Math.PI * 2);
+    textureContext.fill();
   }
 
   return textureCanvas;
@@ -455,19 +512,20 @@ function paintLandscape(ctx, width, height, { mountainLayers, baseColor, fogDens
 
   const paperTexture = createPaperTexture(width, height, seed + 999);
   if (paperTexture) {
-    const pattern = ctx.createPattern(paperTexture, 'repeat');
-
-    if (pattern) {
-      ctx.save();
-      ctx.globalAlpha = 0.55;
-      ctx.fillStyle = pattern;
-      ctx.fillRect(0, 0, width, height);
-      ctx.restore();
-    }
+    ctx.save();
+    ctx.globalAlpha = 0.24;
+    ctx.drawImage(paperTexture, 0, 0, width, height);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 0.14;
+    ctx.drawImage(paperTexture, 0, 0, width, height);
+    ctx.globalCompositeOperation = 'soft-light';
+    ctx.fillStyle = 'rgba(241, 231, 218, 0.14)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
   }
 
   ctx.save();
-  ctx.fillStyle = 'rgba(255, 248, 238, 0.03)';
+  ctx.fillStyle = 'rgba(255, 248, 238, 0.045)';
   ctx.fillRect(0, 0, width, height);
   ctx.restore();
 }
