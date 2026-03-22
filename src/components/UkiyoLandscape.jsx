@@ -6,6 +6,7 @@ const DEFAULT_PANORAMA_SCALE = 2.35;
 const SKY_TOP = '#435c86';
 const SKY_BOTTOM = '#f6d7c0';
 const SUN_COLOR = '#d95b43';
+const OUTLINE_COLOR = { r: 42, g: 43, b: 46 };
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -246,8 +247,40 @@ function buildMountainRidge(width, height, layerIndex, totalLayers, seed) {
   };
 }
 
+function drawMountainOutline(ctx, ridge, seed, layerIndex) {
+  const outlineNoiseScale = 0.0045 + ridge.depth * 0.0025;
+  const jitterAmount = 0.85 + ridge.depth * 1.05;
+
+  ctx.save();
+  ctx.beginPath();
+
+  ridge.points.forEach((point, index) => {
+    const jitter = fbm1D(
+      point.x * outlineNoiseScale + layerIndex * 1.73,
+      seed + layerIndex * 211,
+      3,
+      0.58,
+      2.22,
+    ) * jitterAmount;
+    const y = point.y + jitter;
+
+    if (index === 0) {
+      ctx.moveTo(point.x, y);
+    } else {
+      ctx.lineTo(point.x, y);
+    }
+  });
+
+  ctx.strokeStyle = rgbToCss(OUTLINE_COLOR, 0.78);
+  ctx.lineWidth = ridge.depth > 0.5 ? 3 : 2.2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawMountainLayer(ctx, width, height, ridge, color, seed, layerIndex) {
-  const lineColor = mixRgb(color, { r: 22, g: 28, b: 24 }, 0.38);
+  const lineColor = mixRgb(color, OUTLINE_COLOR, 0.52);
 
   ctx.save();
   ctx.beginPath();
@@ -261,21 +294,6 @@ function drawMountainLayer(ctx, width, height, ridge, color, seed, layerIndex) {
   ctx.closePath();
   ctx.fillStyle = rgbToCss(color, 1);
   ctx.fill();
-
-  if (ridge.depth > 0.35) {
-    ctx.beginPath();
-    ridge.points.forEach((point, index) => {
-      if (index === 0) {
-        ctx.moveTo(point.x, point.y + 2);
-      } else {
-        ctx.lineTo(point.x, point.y + 2);
-      }
-    });
-    ctx.strokeStyle = rgbToCss(lineColor, 0.26 + ridge.depth * 0.12);
-    ctx.lineWidth = 1.2 + ridge.depth * 0.4;
-    ctx.stroke();
-  }
-
   if (ridge.depth > 0.55) {
     const random = createSeededRandom(seed + layerIndex * 251);
     const hatchCount = 18 + Math.floor(ridge.depth * 20);
@@ -298,6 +316,7 @@ function drawMountainLayer(ctx, width, height, ridge, color, seed, layerIndex) {
   }
 
   ctx.restore();
+  drawMountainOutline(ctx, ridge, seed, layerIndex);
 }
 
 function drawFogBand(ctx, width, centerY, thickness, opacity, seedOffset) {
