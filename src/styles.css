@@ -1,4 +1,4 @@
-/* ─── Ukiyo-e Inspired Theme ─── */
+/* ─── Ukiyo-e Gallery Theme ─── */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Cormorant+Garamond:wght@400;600;700&display=swap');
 
 :root {
@@ -92,7 +92,6 @@ body::before {
   font-size: clamp(1.6rem, 2.8vw, 2.8rem);
   line-height: 1.1;
   color: #f5ece0;
-  white-space: nowrap;
   font-family: 'Noto Serif JP', 'Cormorant Garamond', serif;
   font-weight: 700;
 }
@@ -105,10 +104,12 @@ body::before {
   color: rgba(230, 218, 195, 0.75);
 }
 
+/* ─── Control Panel ─── */
 .control-panel {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1.2fr 1fr auto;
+  align-items: center;
   padding: 1rem 1.1rem;
   border: 1px solid rgba(180, 155, 120, 0.2);
   border-radius: 6px;
@@ -132,8 +133,10 @@ body::before {
   color: rgba(200, 180, 150, 0.7);
 }
 
-.field-color {
-  justify-items: start;
+.painting-title {
+  font-size: 1rem !important;
+  color: rgba(245, 235, 218, 0.9) !important;
+  font-style: italic;
 }
 
 .field input[type="range"] {
@@ -141,15 +144,36 @@ body::before {
   accent-color: #a83828;
 }
 
-.field input[type="color"] {
-  width: 72px;
-  height: 42px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
+/* ─── Dot Navigation ─── */
+.dot-nav {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
 }
 
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(200, 175, 140, 0.5);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: all 280ms ease;
+}
+
+.dot:hover {
+  border-color: rgba(200, 175, 140, 0.9);
+  background: rgba(200, 175, 140, 0.2);
+}
+
+.dot-active {
+  background: rgba(168, 56, 40, 0.85);
+  border-color: rgba(200, 80, 60, 0.8);
+  box-shadow: 0 0 8px rgba(168, 56, 40, 0.35);
+}
+
+/* ─── Button ─── */
 .regenerate-button {
   padding: 0.88rem 1.4rem;
   border: 1px solid rgba(180, 60, 40, 0.4);
@@ -165,6 +189,7 @@ body::before {
   text-transform: uppercase;
   font-size: 0.82rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .regenerate-button:hover {
@@ -172,6 +197,7 @@ body::before {
   box-shadow: 0 12px 32px rgba(60, 20, 10, 0.4);
 }
 
+/* ─── Canvas Card ─── */
 .canvas-card {
   position: relative;
   border-radius: 4px;
@@ -221,6 +247,6 @@ body::before {
   }
 
   .title-block h1 {
-    font-size: clamp(2rem, 11vw, 3.3rem);
+    font-size: clamp(1.4rem, 8vw, 2.4rem);
   }
 }
